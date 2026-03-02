@@ -1,0 +1,37 @@
+{
+    "FUSIONINSPECTOR_WORKFLOW - human - stub": {
+        "content": [
+            {
+                "0": [
+                    
+                ],
+                "1": [
+                    "versions.yml:md5,3be8e23309ed0bacebcad3d2fb30642a"
+                ],
+                "ch_arriba_visualisation": [
+                    
+                ],
+                "versions": [
+                    "versions.yml:md5,3be8e23309ed0bacebcad3d2fb30642a"
+                ]
+            }
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.04.6"
+        },
+        "timestamp": "2025-09-08T17:38:59.895142"
+    },
+    "FUSIONINSPECTOR_WORKFLOW - human": {
+        "content": [
+            [
+                "versions.yml:md5,3be8e23309ed0bacebcad3d2fb30642a"
+            ]
+        ],
+        "meta": {
+            "nf-test": "0.9.2",
+            "nextflow": "25.04.6"
+        },
+        "timestamp": "2025-09-08T17:14:05.797063"
+    }
+}

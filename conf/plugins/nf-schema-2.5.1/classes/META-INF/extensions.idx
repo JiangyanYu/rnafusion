@@ -1,3 +1,0 @@
-nextflow.validation.config.ValidationConfig
-nextflow.validation.ValidationExtension
-nextflow.validation.ValidationObserverFactory
