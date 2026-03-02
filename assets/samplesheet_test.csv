@@ -1,2 +1,2 @@
-sample,fastq_1,fastq_2
-SAMPLE1_PE,/home/yu_j/smbshare/rnafusion/sample1_R1.fastq.gz,/home/yu_j/smbshare/rnafusion/sample1_R2.fastq.gz
+sample,fastq_1,fastq_2,strandedness
+SAMPLE1_PE,/home/yu_j/smbshare/rnafusion/sample1_R1.fastq.gz,/home/yu_j/smbshare/rnafusion/sample1_R2.fastq.gz,foward
