@@ -6,7 +6,7 @@ process STARFUSION_BUILD {
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/75/75d085bf2a8e40c6693b357800eef0f9568f661226d0888339bc77f7852234bb/data' :
-        'jiangyanyu/dfam_hmmer_minimap2_star-fusion:e285bb3eb373b9a7'}"
+        'docker.io/jiangyanyu/dfam_hmmer_minimap2_star-fusion:e285bb3eb373b9a7'}"
 
     input:
     tuple val(meta), path(fasta)

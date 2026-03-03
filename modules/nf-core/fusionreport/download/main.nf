@@ -5,7 +5,7 @@ process FUSIONREPORT_DOWNLOAD {
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/ed/ed32f46746a5b33a1b5d597cfe2f62d3b1cfa54638f57cadc5d5158d6a4959d2/data' :
-        'jiangyanyu/fusion-report_beautifulsoup4_click_colorlog_pruned:78488bd99166aa9a'}"
+        'docker.io/jiangyanyu/fusion-report_beautifulsoup4_click_colorlog_pruned:78488bd99166aa9a'}"
 
     output:
     tuple val(meta), path("fusion_report_db"), emit: fusionreport_ref
