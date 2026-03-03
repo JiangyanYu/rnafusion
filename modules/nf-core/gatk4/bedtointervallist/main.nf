@@ -5,7 +5,7 @@ process GATK4_BEDTOINTERVALLIST {
     conda "${moduleDir}/environment.yml"
     container "${workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container
         ? 'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/b2/b28daf5d9bb2f0d129dcad1b7410e0dd8a9b087aaf3ec7ced929b1f57624ad98/data'
-        : 'community.wave.seqera.io/library/gatk4_gcnvkernel:e48d414933d188cd'}"
+        : 'quay.io/biocontainers/gatk4:4.6.2.0--py310hdfd78af_1'}"
 
     input:
     tuple val(meta), path(bed)
