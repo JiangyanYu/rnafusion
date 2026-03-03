@@ -15,7 +15,7 @@ process HGNC_DOWNLOAD {
 
     script:
     """
-    wget --no-check-certificate https://storage.googleapis.com/public-download-files/hgnc/tsv/tsv/hgnc_complete_set.txt
+    wget --no-check-certificate https://github.com/JiangyanYu/rnafusion/blob/nf-core_rnafusion4.0.0/data/hgnc_complete_set.txt
     date +%Y-%m-%d/%H:%M  > HGNC-DB-timestamp.txt
 
     cat <<-END_VERSIONS > versions.yml
