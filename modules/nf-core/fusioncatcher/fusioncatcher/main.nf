@@ -32,7 +32,7 @@ process FUSIONCATCHER_FUSIONCATCHER {
         avail_mem = (task.memory.mega*0.8).intValue()
     }
     """
-    fusioncatcher \\
+    /opt/fusioncatcher/v1.33/bin/fusioncatcher.py \\
         --input=${input} \\
         --output=. \\
         --data=${reference} \\
@@ -46,7 +46,7 @@ process FUSIONCATCHER_FUSIONCATCHER {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        fusioncatcher: "\$(fusioncatcher --version 2>&1 | awk '{print \$2}')"
+        fusioncatcher: "\$(/opt/fusioncatcher/v1.33/bin/fusioncatcher.py --version 2>&1 | awk '{print \$2}')"
     END_VERSIONS
     """
 
