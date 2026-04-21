@@ -54,16 +54,16 @@ process GATK4_MARKDUPLICATES {
         ${args}
 
     # If cram files are wished as output, the run samtools for conversion
-    if [[ ${prefix} == *.cram ]]; then
-        samtools view -Ch -T ${fasta} -o ${prefix} ${prefix_bam}
-        rm ${prefix_bam}
-        samtools index ${prefix}
-    fi
+    #if [[ ${prefix} == *.cram ]]; then
+    #    samtools view -Ch -T ${fasta} -o ${prefix} ${prefix_bam}
+    #    rm ${prefix_bam}
+    #    samtools index ${prefix}
+    #fi
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         gatk4: \$(echo \$(gatk --version 2>&1) | sed 's/^.*(GATK) v//; s/ .*\$//')
-        samtools: \$(echo \$(samtools --version 2>&1) | sed 's/^.*samtools //; s/Using.*\$//')
+        #samtools: \$(echo \$(samtools --version 2>&1) | sed 's/^.*samtools //; s/Using.*\$//')
     END_VERSIONS
     """
 
