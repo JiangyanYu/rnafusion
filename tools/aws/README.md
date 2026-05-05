@@ -9,12 +9,29 @@ Local Ubuntu machine
                                              └─ docker run → download_grch38_refs.sh
 ```
 
+> **Firewall note:** The script is S3-first. All public buckets use
+> `--no-sign-request` (no AWS credentials needed). EBI/Broad HTTPS URLs are
+> used only as fallbacks. If outbound port 443 is fully blocked on the remote
+> machine, see the [Firewall Troubleshooting](#firewall-troubleshooting) section.
+
+---
+
+## Data sources
+
+| Reference | S3 (primary) | HTTPS (fallback) |
+|---|---|---|
+| Genome FASTA | `s3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Sequence/WholeGenomeFasta/genome.fa` | `https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/GRCh38.primary_assembly.genome.fa.gz` |
+| GENCODE GTF | `s3://aws-roda-hcls-data/gencode/release_44/gencode.v44.primary_assembly.annotation.gtf.gz` | `https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/gencode.v44.primary_assembly.annotation.gtf.gz` |
+| Transcript FASTA | `s3://aws-roda-hcls-data/gencode/release_44/gencode.v44.transcripts.fa.gz` | `https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/gencode.v44.transcripts.fa.gz` |
+| STAR index | `s3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Sequence/STARIndex/` | build locally (see Notes) |
+| STARFusion CTAT | `s3://ctat-genome-lib/GRCh38/plug-n-play/GRCh38_gencode_v44_CTAT_lib/` | `https://data.broadinstitute.org/Trinity/CTAT_RESOURCE_LIB/__genome_libs_StarFv1.10/GRCh38_gencode_v43_CTAT_lib_Oct2023.plug-n-play.tar.gz` |
+| HGNC | — (no S3 mirror) | `https://ftp.ebi.ac.uk/pub/databases/genenames/hgnc/tsv/hgnc_complete_set.txt` |
+
 ---
 
 ## Step 1 — Build on your local Ubuntu machine
 
 ```bash
-# Clone / copy these files into a working directory
 mkdir aws-grch38 && cd aws-grch38
 # Place Dockerfile and download_grch38_refs.sh here
 
@@ -35,12 +52,10 @@ docker push your-dockerhub-user/aws-grch38:latest
 ## Step 3 — Pull on the remote machine
 
 ```bash
-# Only needs internet access to DockerHub (hub.docker.com)
 docker pull your-dockerhub-user/aws-grch38:latest
 ```
 
-> **Tip — if DockerHub is also blocked:**
-> Export the image as a tarball on your local machine, transfer via scp/rsync, load on remote:
+> **If DockerHub is blocked:** export as a tarball and transfer via scp:
 > ```bash
 > # Local
 > docker save your-dockerhub-user/aws-grch38:latest | gzip > aws-grch38.tar.gz
@@ -52,50 +67,29 @@ docker pull your-dockerhub-user/aws-grch38:latest
 
 ---
 
-## Step 4 — Set up AWS credentials
+## Step 4 — Run the download script
 
-Choose ONE of:
+All S3 buckets are public — no AWS credentials required.
 
-### Option A — Mount your local credentials (simplest)
 ```bash
-# Assumes ~/.aws/credentials exists with [default] profile
+# Copy the script into your output directory first
+cp download_grch38_refs.sh /path/to/output/
+
+docker run --rm \
+    -v /path/to/output:/data \
+    your-dockerhub-user/aws-grch38:latest \
+    bash /data/download_grch38_refs.sh --outdir /data --threads 8 \
+    2>&1 | tee /path/to/output/download.log
+```
+
+If you do have AWS credentials (e.g. for private buckets):
+```bash
 docker run --rm \
     -v ~/.aws:/root/.aws:ro \
     -v /path/to/output:/data \
     your-dockerhub-user/aws-grch38:latest \
-    bash /data/download_grch38_refs.sh --outdir /data
-```
-
-### Option B — Environment variables
-```bash
-docker run --rm \
-    -e AWS_ACCESS_KEY_ID=AKIA... \
-    -e AWS_SECRET_ACCESS_KEY=... \
-    -e AWS_DEFAULT_REGION=us-east-1 \
-    -v /path/to/output:/data \
-    your-dockerhub-user/aws-grch38:latest \
-    bash /data/download_grch38_refs.sh --outdir /data
-```
-
-### Option C — Public datasets (no credentials)
-Most of the downloads (GENCODE, HGNC, CTAT/STARFusion) use **public HTTPS URLs**
-and need no AWS credentials at all. Only the pre-built STAR index sync from
-ENCODE S3 uses `--no-sign-request`. If you don't have AWS keys, the script will
-still download the majority of the data.
-
----
-
-## Step 5 — Copy the download script into your output volume
-
-```bash
-# On remote machine — copy the script into your output dir first
-cp download_grch38_refs.sh /path/to/output/
-
-# Then run the container
-docker run --rm \
-    -v /path/to/output:/data \
-    your-dockerhub-user/aws-grch38:latest \
-    bash /data/download_grch38_refs.sh --outdir /data --threads 8
+    bash /data/download_grch38_refs.sh --outdir /data --threads 8 \
+    2>&1 | tee /path/to/output/download.log
 ```
 
 ---
@@ -105,47 +99,69 @@ docker run --rm \
 ```
 /data/
 ├── genome_fasta/
-│   └── GRCh38.primary_assembly.genome.fa.gz       (~900 MB)
+│   └── GRCh38.primary_assembly.genome.fa          (~3.2 GB)
 ├── gencode/
 │   ├── gencode.v44.primary_assembly.annotation.gtf.gz  (~50 MB)
-│   ├── gencode.v44.transcripts.fa.gz               (~200 MB)
-│   └── gencode.v44.long_noncoding_RNAs.gtf.gz
+│   └── gencode.v44.transcripts.fa.gz               (~200 MB)
 ├── star_index/
-│   └── gencode_v29_oh100/                          (~28 GB, pre-built)
+│   └── GRCh38/                                     (~28 GB, pre-built)
 ├── salmon_index/
 │   └── gencode_v44/                                (built locally)
 ├── starfusion/
-│   └── GRCh38_gencode_v43_CTAT_lib_Oct2023.plug-n-play.tar.gz  (~30 GB)
+│   └── GRCh38_CTAT_lib/                            (~100 GB extracted)
 └── hgnc/
-    ├── hgnc_complete_set.txt
-    └── hgnc_protein_coding.txt
+    └── hgnc_complete_set.txt
 ```
 
 ---
 
 ## Disk space requirements
 
-| Dataset        | Compressed | Extracted |
-|----------------|-----------|-----------|
-| GENCODE genome | ~900 MB   | ~3.2 GB   |
-| GENCODE GTF    | ~50 MB    | ~300 MB   |
-| STAR index     | ~28 GB    | ~28 GB    |
-| Salmon index   | ~1 GB     | ~1 GB     |
-| STARFusion CTAT| ~30 GB    | ~100 GB   |
-| HGNC tables    | ~30 MB    | ~30 MB    |
+| Dataset         | Compressed | Extracted |
+|-----------------|-----------|-----------|
+| Genome FASTA    | ~900 MB   | ~3.2 GB   |
+| GENCODE GTF     | ~50 MB    | ~300 MB   |
+| STAR index      | ~28 GB    | ~28 GB    |
+| Salmon index    | ~1 GB     | ~1 GB     |
+| STARFusion CTAT | ~30 GB    | ~100 GB   |
+| HGNC            | ~30 MB    | ~30 MB    |
 
-**Total: ~160 GB extracted** — provision at least 200 GB on your output volume.
+**Total: ~160 GB extracted** — provision at least 200 GB.
+
+---
+
+## Firewall troubleshooting
+
+The script requires outbound HTTPS (port 443). If it fails entirely:
+
+**1. Check for a required proxy**
+```bash
+env | grep -i proxy
+# If empty, ask your sysadmin: "What proxy should I use for outbound HTTPS?"
+# Then pass it to docker run:
+docker run --rm -e HTTPS_PROXY=http://proxy.institution.edu:3128 ...
+```
+
+**2. Check if data already exists on the remote machine**
+```bash
+find /reference /data /shared /nfs /mnt -maxdepth 4 \
+    -name "*.fa" -o -name "GRCh38*" -o -name "*.gtf" 2>/dev/null
+```
+
+**3. Download locally and transfer via rsync**
+```bash
+# Run the script on your local machine
+bash download_grch38_refs.sh --outdir ./grch38_refs
+
+# Transfer over SSH (port 22 is usually open)
+rsync -avzP ./grch38_refs/ user@remote-host:/path/to/data/
+```
 
 ---
 
 ## Notes
 
-- **GENCODE version**: Default is v44. Change with `--gencode 43` etc.
-- **STAR index**: Pre-built index from ENCODE uses gencode v29. For an exact
-  version match, build locally using the `STAR --runMode genomeGenerate` command
-  printed at the end of the download script.
-- **STARFusion**: The CTAT plug-n-play lib bundles its own STAR genome index,
-  so you may not need a separate STAR index if you're only running STARFusion.
-- **Salmon index**: Must be built from the downloaded transcript FASTA (command
-  shown at end of download script). Salmon is not included in this Docker image —
-  run it separately or add it to the Dockerfile.
+- **GENCODE version**: Default is v44. Override with `--gencode 43` etc.
+- **STARFusion**: The CTAT plug-n-play lib bundles its own STAR genome index — you may not need a separate STAR index if STARFusion is your only use case.
+- **Salmon index**: No public S3 mirror exists. Build locally after downloading the transcript FASTA — the script prints the exact command.
+- **STAR index**: Pre-built index from iGenomes may not exactly match your GENCODE version. To build from scratch: `STAR --runMode genomeGenerate --genomeDir ... --genomeFastaFiles ... --sjdbGTFfile ... --runThreadN 8`
