@@ -1,2 +1,3 @@
 sample,fastq_1,fastq_2,strandedness
 SAMPLE1_PE,/home/yu_j/smbshare/rnafusion/sample1_R1.fastq.gz,/home/yu_j/smbshare/rnafusion/sample1_R2.fastq.gz,forward
+samplePat26-1057_S1,/home/yu_j/smbshare/ALLDx/samplePat26-1057_S1/samplePat26-1057_S1_L001_R1_001.fastq.gz,/home/yu_j/smbshare/ALLDx/samplePat26-1057_S1/samplePat26-1057_S1_L001_R2_001.fastq.gz,forward
