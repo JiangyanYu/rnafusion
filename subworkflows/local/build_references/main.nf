@@ -195,7 +195,7 @@ workflow BUILD_REFERENCES {
 
     def ch_fusionreport_ref = Channel.empty()
     if (tools.contains("fusionreport")) {
-        if (!exists_not_empty(params.fusionreport_ref)) {
+        if (!params.fusionreport_ref) {
             if (!params.no_cosmic && (!params.cosmic_username || !params.cosmic_passwd)) {
                 error('COSMIC username and/or password missing, this is needed to download the fusionreport reference')
             }
