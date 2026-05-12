@@ -1,30 +1,34 @@
 #!/usr/bin/env bash
 # =============================================================================
-# download_grch38_refs.sh  (v2 — S3-first, resilient)
+# download_grch38_refs.sh  (v3 — Ensembl-based, full fusion caller refs)
 #
-# Uses AWS S3 (--no-sign-request) wherever possible to avoid firewall blocks
-# on EBI/Broad FTP/HTTPS endpoints. Falls back to curl only where no S3
-# mirror exists.
+# Downloads all GRCh38 reference data for:
+#   STAR, Salmon, STARFusion, FusionCatcher, Arriba, HGNC
+#
+# Strategy: S3 (--no-sign-request) where available, HTTPS fallback elsewhere.
+# No AWS credentials required for public buckets.
 #
 # Usage:
-#   bash download_grch38_refs.sh [--outdir /data] [--threads 4] [--gencode 44]
+#   bash download_grch38_refs.sh [--outdir /data] [--threads 8] [--ensembl 115]
 #
-# AWS credentials: not required — all buckets used here are public.
+# Recommended: run locally, then rsync to remote:
+#   rsync -avzP ./grch38_refs/ user@remote-host:/path/to/data/
 # =============================================================================
 
-set -uo pipefail   # no -e: we handle errors per-block
+set -uo pipefail  # no -e: errors handled per-block
 
 # ---------- defaults ---------------------------------------------------------
-OUTDIR="/data"
-THREADS=4
-GENCODE_VERSION="44"
+OUTDIR="./grch38_refs"
+THREADS=8
+ENSEMBL_VERSION="115"
+ARRIBA_VERSION="2.5.1"
 GENOME_BUILD="GRCh38"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --outdir)   OUTDIR="$2";          shift 2 ;;
         --threads)  THREADS="$2";         shift 2 ;;
-        --gencode)  GENCODE_VERSION="$2"; shift 2 ;;
+        --ensembl)  ENSEMBL_VERSION="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -39,11 +43,13 @@ mark_manual() { STATUS["$1"]="BUILD MANUALLY"; }
 
 # ---------- helpers ----------------------------------------------------------
 mkdir -p \
-    "$OUTDIR/genome_fasta" \
-    "$OUTDIR/gencode" \
+    "$OUTDIR/fasta" \
+    "$OUTDIR/gtf" \
     "$OUTDIR/star_index" \
     "$OUTDIR/salmon_index" \
     "$OUTDIR/starfusion" \
+    "$OUTDIR/fusioncatcher" \
+    "$OUTDIR/arriba" \
     "$OUTDIR/hgnc"
 
 s3_get() {
@@ -59,95 +65,84 @@ curl_get() {
 }
 
 echo "============================================================"
-echo " GRCh38 Reference Data Downloader v2 (S3-first)"
+echo " GRCh38 Reference Data Downloader v3"
 echo " outdir  : $OUTDIR"
-echo " gencode : v${GENCODE_VERSION}"
+echo " Ensembl : v${ENSEMBL_VERSION}"
+echo " Arriba  : v${ARRIBA_VERSION}"
 echo " threads : $THREADS"
 echo "============================================================"
 
+ENSEMBL_FTP="https://ftp.ensembl.org/pub/release-${ENSEMBL_VERSION}/fasta/homo_sapiens/dna"
+ENSEMBL_GTF="https://ftp.ensembl.org/pub/release-${ENSEMBL_VERSION}/gtf/homo_sapiens"
+
 
 # =============================================================================
-# 1. Genome FASTA — nf-core iGenomes S3 (public, no credentials)
+# 1. Ensembl genome FASTA
 # =============================================================================
 echo ""
-echo "[1/7] Genome FASTA (nf-core iGenomes S3)"
+echo "[1/8] Ensembl GRCh38 genome FASTA (release ${ENSEMBL_VERSION})"
 
-FASTA_DEST="$OUTDIR/genome_fasta/${GENOME_BUILD}.primary_assembly.genome.fa"
-IGENOMES_SEQ="s3://ngi-igenomes/igenomes/Homo_sapiens/NCBI/GRCh38/Sequence"
+FASTA_DEST="$OUTDIR/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
 
-if [[ -f "$FASTA_DEST" || -f "${FASTA_DEST}.gz" ]]; then
-    mark_skip "genome_fasta"
+if [[ -f "$FASTA_DEST" ]]; then
+    mark_skip "fasta"
 else
-    s3_get "${IGENOMES_SEQ}/WholeGenomeFasta/genome.fa" "$FASTA_DEST" \
-        && mark_ok "genome_fasta" \
-        || mark_failed "genome_fasta"
+    # Try nf-core iGenomes S3 first (Ensembl-sourced)
+    s3_get \
+        "s3://ngi-igenomes/igenomes/Homo_sapiens/Ensembl/GRCh38/Sequence/WholeGenomeFasta/genome.fa" \
+        "$FASTA_DEST" \
+        && mark_ok "fasta" \
+        || {
+            echo "  [warn] S3 failed — trying Ensembl FTP..."
+            curl_get \
+                "${ENSEMBL_FTP}/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz" \
+                "$FASTA_DEST" \
+                && mark_ok "fasta" \
+                || mark_failed "fasta"
+        }
 fi
 
 
 # =============================================================================
-# 2. GENCODE GTF — AWS Open Data S3, fallback curl EBI
+# 2. Ensembl GTF annotation
 # =============================================================================
 echo ""
-echo "[2/7] GENCODE v${GENCODE_VERSION} GTF"
+echo "[2/8] Ensembl GRCh38 GTF (release ${ENSEMBL_VERSION})"
 
-GTF_DEST="$OUTDIR/gencode/gencode.v${GENCODE_VERSION}.primary_assembly.annotation.gtf.gz"
+GTF_DEST="$OUTDIR/gtf/Homo_sapiens.GRCh38.${ENSEMBL_VERSION}.gtf.gz"
 
 if [[ -f "$GTF_DEST" ]]; then
-    mark_skip "gencode_gtf"
+    mark_skip "gtf"
 else
-    S3_GTF="s3://aws-roda-hcls-data/gencode/release_${GENCODE_VERSION}/gencode.v${GENCODE_VERSION}.primary_assembly.annotation.gtf.gz"
-    s3_get "$S3_GTF" "$GTF_DEST" \
-        && mark_ok "gencode_gtf" \
+    s3_get \
+        "s3://ngi-igenomes/igenomes/Homo_sapiens/Ensembl/GRCh38/Annotation/Genes/genes.gtf" \
+        "$GTF_DEST" \
+        && mark_ok "gtf" \
         || {
-            echo "  [warn] S3 failed — trying EBI HTTPS..."
+            echo "  [warn] S3 failed — trying Ensembl FTP..."
             curl_get \
-                "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_${GENCODE_VERSION}/gencode.v${GENCODE_VERSION}.primary_assembly.annotation.gtf.gz" \
+                "${ENSEMBL_GTF}/Homo_sapiens.GRCh38.${ENSEMBL_VERSION}.gtf.gz" \
                 "$GTF_DEST" \
-                && mark_ok "gencode_gtf" \
-                || mark_failed "gencode_gtf"
+                && mark_ok "gtf" \
+                || mark_failed "gtf"
         }
 fi
 
 
 # =============================================================================
-# 3. GENCODE transcript FASTA (for Salmon) — AWS Open Data S3, fallback curl
+# 3. STAR index — nf-core iGenomes S3 (Ensembl GRCh38), fallback ENCODE S3
 # =============================================================================
 echo ""
-echo "[3/7] GENCODE v${GENCODE_VERSION} transcript FASTA (for Salmon)"
+echo "[3/8] STAR index (pre-built, S3)"
 
-TX_DEST="$OUTDIR/gencode/gencode.v${GENCODE_VERSION}.transcripts.fa.gz"
-
-if [[ -f "$TX_DEST" ]]; then
-    mark_skip "gencode_transcripts"
-else
-    S3_TX="s3://aws-roda-hcls-data/gencode/release_${GENCODE_VERSION}/gencode.v${GENCODE_VERSION}.transcripts.fa.gz"
-    s3_get "$S3_TX" "$TX_DEST" \
-        && mark_ok "gencode_transcripts" \
-        || {
-            echo "  [warn] S3 failed — trying EBI HTTPS..."
-            curl_get \
-                "https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_${GENCODE_VERSION}/gencode.v${GENCODE_VERSION}.transcripts.fa.gz" \
-                "$TX_DEST" \
-                && mark_ok "gencode_transcripts" \
-                || mark_failed "gencode_transcripts"
-        }
-fi
-
-
-# =============================================================================
-# 4. STAR index — nf-core iGenomes S3, fallback ENCODE S3
-# =============================================================================
-echo ""
-echo "[4/7] STAR index (S3 pre-built)"
-
-STAR_DEST="$OUTDIR/star_index/GRCh38"
+STAR_DEST="$OUTDIR/star_index/GRCh38_ensembl"
 
 if [[ -d "$STAR_DEST" && -f "$STAR_DEST/SA" ]]; then
     mark_skip "star_index"
 else
     mkdir -p "$STAR_DEST"
     s3_sync \
-        "${IGENOMES_SEQ}/STARIndex/" \
+        "s3://ngi-igenomes/igenomes/Homo_sapiens/Ensembl/GRCh38/Sequence/STARIndex/" \
         "$STAR_DEST" \
         && mark_ok "star_index" \
         || {
@@ -162,21 +157,22 @@ fi
 
 
 # =============================================================================
-# 5. Salmon index — no reliable universal S3 mirror; print build command
+# 4. Salmon index — no S3 mirror; print build command
 # =============================================================================
 echo ""
-echo "[5/7] Salmon index"
+echo "[4/8] Salmon index"
 
-SALMON_DEST="$OUTDIR/salmon_index/gencode_v${GENCODE_VERSION}"
+SALMON_DEST="$OUTDIR/salmon_index/ensembl_v${ENSEMBL_VERSION}"
 
 if [[ -d "$SALMON_DEST" ]]; then
     mark_skip "salmon_index"
 else
     echo "  [info] No public S3 mirror for Salmon indices."
-    echo "         Once transcript FASTA is downloaded, build with:"
+    echo "         Build after downloading the FASTA:"
     echo ""
+    echo "    # Extract transcript sequences from genome + GTF, then:"
     echo "    salmon index \\"
-    echo "      -t $TX_DEST \\"
+    echo "      -t $OUTDIR/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz \\"
     echo "      -d /dev/null \\"
     echo "      -i $SALMON_DEST \\"
     echo "      -p $THREADS"
@@ -186,13 +182,15 @@ fi
 
 
 # =============================================================================
-# 6. STARFusion CTAT lib — CTAT S3 (public), fallback Broad HTTPS
+# 5. STARFusion — CTAT lib + fusion_lib.Mar2021.dat.gz
 # =============================================================================
 echo ""
-echo "[6/7] STARFusion CTAT genome library"
+echo "[5/8] STARFusion CTAT genome library + fusion annotation lib"
 
 CTAT_DEST="$OUTDIR/starfusion/GRCh38_CTAT_lib"
+FUSION_LIB_DEST="$OUTDIR/starfusion/fusion_lib.Mar2021.dat.gz"
 
+# CTAT lib
 if [[ -d "$CTAT_DEST" && "$(ls -A "$CTAT_DEST" 2>/dev/null)" ]]; then
     mark_skip "starfusion_ctat"
 else
@@ -202,27 +200,94 @@ else
         "$CTAT_DEST" \
         && mark_ok "starfusion_ctat" \
         || {
-            echo "  [warn] CTAT S3 failed — trying Broad HTTPS (large file ~30 GB)..."
+            echo "  [warn] CTAT S3 failed — trying Broad HTTPS..."
             CTAT_FILE="GRCh38_gencode_v43_CTAT_lib_Oct2023.plug-n-play.tar.gz"
             curl_get \
                 "https://data.broadinstitute.org/Trinity/CTAT_RESOURCE_LIB/__genome_libs_StarFv1.10/${CTAT_FILE}" \
                 "$OUTDIR/starfusion/${CTAT_FILE}" \
-                && {
-                    echo "  Extracting..."
-                    tar -xzf "$OUTDIR/starfusion/${CTAT_FILE}" -C "$OUTDIR/starfusion/" --strip-components=1 \
-                        && mark_ok "starfusion_ctat" \
-                        || mark_failed "starfusion_ctat"
-                } \
+                && tar -xzf "$OUTDIR/starfusion/${CTAT_FILE}" -C "$OUTDIR/starfusion/" --strip-components=1 \
+                && mark_ok "starfusion_ctat" \
                 || mark_failed "starfusion_ctat"
         }
 fi
 
+# fusion_lib.Mar2021.dat.gz
+if [[ -f "$FUSION_LIB_DEST" ]]; then
+    mark_skip "starfusion_fusion_lib"
+else
+    curl_get \
+        "https://data.broadinstitute.org/Trinity/CTAT_RESOURCE_LIB/fusion_lib.Mar2021.dat.gz" \
+        "$FUSION_LIB_DEST" \
+        && mark_ok "starfusion_fusion_lib" \
+        || mark_failed "starfusion_fusion_lib"
+fi
+
 
 # =============================================================================
-# 7. HGNC — EBI only; try HTTPS then HTTP then genenames.org
+# 6. FusionCatcher reference — human_v102
+#    Hosted on Google Drive (no direct wget); print manual download instructions
 # =============================================================================
 echo ""
-echo "[7/7] HGNC gene tables"
+echo "[6/8] FusionCatcher reference (human_v102)"
+
+FC_DEST="$OUTDIR/fusioncatcher/human_v102"
+
+if [[ -d "$FC_DEST" && "$(ls -A "$FC_DEST" 2>/dev/null)" ]]; then
+    mark_skip "fusioncatcher"
+else
+    echo "  [info] FusionCatcher human_v102 is hosted on Google Drive (~18 GB)."
+    echo "         Automated download is unreliable. Recommended approach:"
+    echo ""
+    echo "    # Install gdown (Python)"
+    echo "    pip install gdown"
+    echo ""
+    echo "    # Download and extract"
+    echo "    gdown --fuzzy 'https://drive.google.com/file/d/1F7j3OQoNpH3oDBjfcDl1tMLp_g0FVKZ3' \\"
+    echo "          -O $OUTDIR/fusioncatcher/human_v102.tar.gz"
+    echo "    tar -xzf $OUTDIR/fusioncatcher/human_v102.tar.gz -C $OUTDIR/fusioncatcher/"
+    echo ""
+    echo "    # Or via the FusionCatcher tool itself:"
+    echo "    fusioncatcher-build -g homo_sapiens -o $FC_DEST"
+    echo ""
+    mark_manual "fusioncatcher"
+fi
+
+
+# =============================================================================
+# 7. Arriba references — v2.5.1 (GitHub releases, HTTPS only)
+# =============================================================================
+echo ""
+echo "[7/8] Arriba references (v${ARRIBA_VERSION})"
+
+ARRIBA_BASE="https://github.com/suhrig/arriba/releases/download/v${ARRIBA_VERSION}"
+ARRIBA_DEST="$OUTDIR/arriba"
+
+declare -A ARRIBA_FILES=(
+    ["blacklist"]="blacklist_hg38_GRCh38_v${ARRIBA_VERSION}.tsv.gz"
+    ["cytobands"]="cytobands_hg38_GRCh38_v${ARRIBA_VERSION}.tsv"
+    ["known_fusions"]="known_fusions_hg38_GRCh38_v${ARRIBA_VERSION}.tsv.gz"
+    ["protein_domains"]="protein_domains_hg38_GRCh38_v${ARRIBA_VERSION}.gff3"
+)
+
+ARRIBA_OK=true
+for key in "${!ARRIBA_FILES[@]}"; do
+    fname="${ARRIBA_FILES[$key]}"
+    dest="$ARRIBA_DEST/$fname"
+    if [[ -f "$dest" ]]; then
+        mark_skip "arriba_${key}"
+    else
+        curl_get "${ARRIBA_BASE}/${fname}" "$dest" \
+            && mark_ok "arriba_${key}" \
+            || { mark_failed "arriba_${key}"; ARRIBA_OK=false; }
+    fi
+done
+
+
+# =============================================================================
+# 8. HGNC — EBI FTP, try HTTPS then HTTP then genenames.org
+# =============================================================================
+echo ""
+echo "[8/8] HGNC gene tables"
 
 HGNC_DEST="$OUTDIR/hgnc/hgnc_complete_set.txt"
 
@@ -259,9 +324,16 @@ echo "============================================================"
 echo " DOWNLOAD SUMMARY"
 echo "============================================================"
 FAILED=0
-for key in genome_fasta gencode_gtf gencode_transcripts star_index salmon_index starfusion_ctat hgnc; do
+for key in \
+    fasta gtf \
+    star_index salmon_index \
+    starfusion_ctat starfusion_fusion_lib \
+    fusioncatcher \
+    arriba_blacklist arriba_cytobands arriba_known_fusions arriba_protein_domains \
+    hgnc
+do
     result="${STATUS[$key]:-NOT RUN}"
-    printf "  %-25s %s\n" "$key" "$result"
+    printf "  %-35s %s\n" "$key" "$result"
     [[ "$result" == "FAILED" ]] && FAILED=$((FAILED + 1))
 done
 echo ""
