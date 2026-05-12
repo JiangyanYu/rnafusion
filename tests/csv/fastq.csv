@@ -1,0 +1,2 @@
+sample,fastq_1,fastq_2,strandedness
+test,/home/yu_j/smbshare/rnafusion/reads_1.fq.gz,/home/yu_j/smbshare/rnafusion//reads_2.fq.gz,forward
