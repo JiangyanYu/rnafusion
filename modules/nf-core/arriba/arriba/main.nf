@@ -3,9 +3,7 @@ process ARRIBA_ARRIBA {
     label 'process_medium'
 
     conda "${moduleDir}/environment.yml"
-    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/27/27475cdcdbcc8c0ffb6b5ca8c2e6567dbe490edb96f5df4e8f01f4f95912dcd3/data' :
-        'docker.io/jiangyanyu/arriba_wget:9fd65a0fb7774d26' }"
+    container 'docker://uhrigs/arriba:2.5.0'
 
     input:
     tuple val(meta),  path(bam)
