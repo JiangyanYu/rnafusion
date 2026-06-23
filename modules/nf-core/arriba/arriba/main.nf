@@ -32,7 +32,7 @@ process ARRIBA_ARRIBA {
     def protein_domains_arg = protein_domains ? "-p ${protein_domains}" : ""
 
     """
-    arriba \\
+    /arriba_v2.5.0/arriba \\
         -x ${bam} \\
         -a ${fasta} \\
         -g ${gtf} \\
