@@ -3,7 +3,7 @@ process ARRIBA_ARRIBA {
     label 'process_medium'
 
     conda "${moduleDir}/environment.yml"
-    container 'docker://uhrigs/arriba:2.5.0'
+    container 'docker.io/uhrigs/arriba:2.5.0'
 
     input:
     tuple val(meta),  path(bam)
