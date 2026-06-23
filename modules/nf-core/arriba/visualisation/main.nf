@@ -3,7 +3,7 @@ process ARRIBA_VISUALISATION {
     label 'process_medium'
 
     conda "${moduleDir}/environment.yml"
-    container 'docker://uhrigs/arriba:2.5.0'
+    container 'docker.io/uhrigs/arriba:2.5.0'
 
     input:
     tuple val(meta) , path(bam), path(bai), path(fusions)
@@ -25,7 +25,7 @@ process ARRIBA_VISUALISATION {
     def arg_protein_domains = protein_domains ? "--proteinDomains=$protein_domains" : ""
     def prefix              = task.ext.prefix ?: "${meta.id}"
     """
-    draw_fusions.R \\
+    /arriba_v2.5.0/draw_fusions.R \\
         --fusions=$fusions \\
         --output=${prefix}.pdf \\
         --annotation=${gtf} \\
