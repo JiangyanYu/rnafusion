@@ -142,6 +142,8 @@ def write_rsync_script(resolved: list[dict], dest: Path, output: Path, verbose: 
         "",
         f"DEST={shlex.quote(str(dest))}",
         "",
+        'mkdir -p "$DEST"',
+        "",
     ]
 
     skipped_no_r2 = 0
@@ -153,15 +155,12 @@ def write_rsync_script(resolved: list[dict], dest: Path, output: Path, verbose: 
         if not r1:
             continue
 
-        patient_dir = f'"$DEST"/{shlex.quote(patient)}'
-        lines.append(f"mkdir -p {patient_dir}")
-
         if r2:
-            lines.append(f"rsync -avP {shlex.quote(r1)} {shlex.quote(r2)} {patient_dir}/")
+            lines.append(f'rsync -avP {shlex.quote(r1)} {shlex.quote(r2)} "$DEST"/')
         else:
             skipped_no_r2 += 1
             lines.append(f"# WARNING: no R2 found for patient {patient}, copying R1 only")
-            lines.append(f"rsync -avP {shlex.quote(r1)} {patient_dir}/")
+            lines.append(f'rsync -avP {shlex.quote(r1)} "$DEST"/')
         lines.append("")
 
     if skipped_no_r2:
