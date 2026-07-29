@@ -8,4 +8,7 @@ export NXF_PLUGINS_DIR="/home/yu_j/.nextflow/plugins/"
 	--arriba_ref_cytobands /home/schilling_m1/Bioinformatics/rnafusion/cytobands_hg38_GRCh38_v2.5.0.tsv.gz \
 	--arriba_ref_known_fusions /home/schilling_m1/Bioinformatics/rnafusion/known_fusions_hg38_GRCh38_v2.5.0.tsv.gz \
 	--arriba_ref_protein_domains /home/schilling_m1/Bioinformatics/rnafusion/protein_domains_hg38_GRCh38_v2.5.0.tsv.gz \
+	--fusion_annot_lib /home/schilling_m1/Bioinformatics/rnafusion/fusion_lib.Mar2021.dat.gz \
+	--fasta /home/schilling_m1/Bioinformatics/rnafusion/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz \
+	--gtf /home/schilling_m1/Bioinformatics/rnafusion/Homo_sapiens.GRCh38.115.gtf.gz \
 
